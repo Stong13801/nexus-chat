@@ -1,0 +1,20 @@
+{
+  "name": "nexus-chat",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main/main.js",
+  "scripts": {
+    "start": "concurrently \"npm run electron\" \"npm run react\"",
+    "react": "cd client && npm start",
+    "electron": "wait-on http://localhost:3000 && electron ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "concurrently": "^9.2.0",
+    "electron": "^37.2.5",
+    "wait-on": "^8.0.4"
+  }
+}
