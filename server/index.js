@@ -38,7 +38,11 @@ app.post('/register', async (req, res) => {
 
   try {
     const hashed = await bcrypt.hash(password, 10);
-    const newUser = { username, password: hashed };
+    const newUser = {
+        username,
+        password: hashed,
+        avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${username}`
+    };
     users.push(newUser);
     fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
     console.log('✅ Зарегистрирован:', username);
@@ -58,7 +62,12 @@ app.post('/login', async (req, res) => {
   if (!valid) return res.status(401).json({ message: 'Неверный логин или пароль' });
 
   console.log('🔓 Вход выполнен:', username);
-  res.status(200).json({ message: 'Вход успешен', username });
+  res.status(200).json({
+    message: 'Вход успешен',
+    username,
+    avatar: user.avatar || null
+    });
+
 });
 
 // 📥 ЗАГРУЗКА СООБЩЕНИЙ

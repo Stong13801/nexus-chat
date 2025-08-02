@@ -1,10 +1,12 @@
 [
   {
     "username": "stong",
-    "password": "i215120"
+    "password": "i215120",
+    "avatar": "https://api.dicebear.com/7.x/identicon/svg?seed=stong"
   },
   {
     "username": "stong13801",
-    "password": "i215120"
+    "password": "i215120",
+    "avatar": "https://api.dicebear.com/7.x/identicon/svg?seed=stong13801"
   }
 ]
