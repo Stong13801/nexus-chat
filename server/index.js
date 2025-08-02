@@ -14,13 +14,10 @@ app.use(express.json());
 
 const usersFile = path.join(__dirname, 'users.json');
 const messagesDir = path.join(__dirname, 'messages');
-const defaultChannels = ['general', 'random', 'support'];
+const channelsFile = path.join(__dirname, 'channels.json');
 
 if (!fs.existsSync(messagesDir)) {
   fs.mkdirSync(messagesDir);
-  for (const ch of defaultChannels) {
-    fs.writeFileSync(path.join(messagesDir, `${ch}.json`), '[]');
-  }
 }
 
 let users = [];
@@ -28,6 +25,15 @@ try {
   users = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
 } catch {
   users = [];
+}
+
+let channels = [];
+if (fs.existsSync(channelsFile)) {
+  channels = JSON.parse(fs.readFileSync(channelsFile));
+} else {
+  channels = ['general', 'random', 'support'];
+  fs.writeFileSync(channelsFile, JSON.stringify(channels));
+  channels.forEach(ch => fs.writeFileSync(path.join(messagesDir, `${ch}.json`), '[]'));
 }
 
 // 🔐 Регистрация
@@ -45,9 +51,8 @@ app.post('/register', async (req, res) => {
     };
     users.push(newUser);
     fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
-    console.log('✅ Зарегистрирован:', username);
     res.status(200).json({ message: 'Успешно зарегистрирован' });
-  } catch (err) {
+  } catch {
     res.status(500).json({ message: 'Ошибка регистрации' });
   }
 });
@@ -76,16 +81,16 @@ app.patch('/update-avatar', (req, res) => {
 
   user.avatar = avatar;
   fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
-  console.log(`🖼 Аватар обновлён: ${username}`);
   res.status(200).json({ message: 'Аватар обновлён', avatar });
 });
 
 // 📥 Загрузка сообщений
 app.get('/messages/:channel', (req, res) => {
   const { channel } = req.params;
+  const filePath = path.join(messagesDir, `${channel}.json`);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ message: 'Канал не найден' });
+
   try {
-    const filePath = path.join(messagesDir, `${channel}.json`);
-    if (!fs.existsSync(filePath)) return res.status(404).json({ message: 'Канал не найден' });
     const messages = JSON.parse(fs.readFileSync(filePath, 'utf8'));
     res.json(messages);
   } catch {
@@ -93,7 +98,12 @@ app.get('/messages/:channel', (req, res) => {
   }
 });
 
-// ➕ Создание канала
+// 📋 Список всех каналов
+app.get('/channels', (req, res) => {
+  res.json(channels);
+});
+
+// ➕ Создание нового канала
 app.post('/create-channel', (req, res) => {
   const { channel } = req.body;
   const name = channel?.toLowerCase().trim();
@@ -102,16 +112,15 @@ app.post('/create-channel', (req, res) => {
     return res.status(400).json({ message: 'Недопустимое имя канала' });
   }
 
-  const filePath = path.join(messagesDir, `${name}.json`);
-  if (fs.existsSync(filePath)) return res.status(409).json({ message: 'Канал уже существует' });
-
-  try {
-    fs.writeFileSync(filePath, '[]');
-    console.log(`📁 Создан новый канал: #${name}`);
-    res.status(200).json({ message: 'Канал создан' });
-  } catch (err) {
-    res.status(500).json({ message: 'Ошибка при создании канала' });
+  if (channels.includes(name)) {
+    return res.status(409).json({ message: 'Канал уже существует' });
   }
+
+  channels.push(name);
+  fs.writeFileSync(channelsFile, JSON.stringify(channels));
+  fs.writeFileSync(path.join(messagesDir, `${name}.json`), '[]');
+  io.emit('new_channel', name);
+  res.status(200).json({ message: 'Канал создан' });
 });
 
 // 🌐 WebSocket
@@ -126,10 +135,10 @@ const onlineUsers = {};
 
 io.on('connection', (socket) => {
   console.log('🟢 Подключён:', socket.id);
+  socket.emit('channels_list', channels);
 
   socket.on('user_connected', (username) => {
     onlineUsers[socket.id] = username;
-    console.log(`✅ ${username} вошёл`);
     io.emit('online_users', Object.values(onlineUsers));
   });
 
@@ -137,18 +146,12 @@ io.on('connection', (socket) => {
     const username = onlineUsers[socket.id];
     if (!username) return;
 
-    // 🔐 Проверка доступа к ЛС
     if (channel.startsWith('dm-')) {
-      const parts = channel.split('-');
-      const allowed = [parts[1], parts[2]];
-      if (!allowed.includes(username)) {
-        console.log(`⛔ ${username} попытался подключиться к чужому ЛС: ${channel}`);
-        return;
-      }
+      const [_, userA, userB] = channel.split('-');
+      if (![userA, userB].includes(username)) return;
     }
 
     socket.join(channel);
-    console.log(`📥 ${username} → #${channel}`);
   });
 
   socket.on('send_message', (data) => {
@@ -174,7 +177,6 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     const username = onlineUsers[socket.id];
     delete onlineUsers[socket.id];
-    console.log(`🔴 ${username || 'Пользователь'} отключён`);
     io.emit('online_users', Object.values(onlineUsers));
   });
 });
