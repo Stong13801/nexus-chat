@@ -8,5 +8,15 @@
     "username": "stong13801",
     "password": "i215120",
     "avatar": "https://api.dicebear.com/7.x/identicon/svg?seed=stong13801"
+  },
+  {
+    "username": "stong13",
+    "password": "$2b$10$iJYUGGiOdeldfqWEXC./2uuojQHfn/5IPFLvcjG5r09EQRgpkAYHO",
+    "avatar": "https://api.dicebear.com/7.x/identicon/svg?seed=stong13"
+  },
+  {
+    "username": "stong138",
+    "password": "$2b$10$pdVFBF8OwTQCE.rZgNheDO7aP/uh1XAFEvq7Ycq/Hdl6pKA2lF/jW",
+    "avatar": "https://api.dicebear.com/7.x/identicon/svg?seed=stong138"
   }
 ]
