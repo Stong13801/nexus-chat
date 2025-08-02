@@ -46,17 +46,32 @@ const io = new Server(server, {
   },
 });
 
+const onlineUsers = {}; // socket.id => username
+
 io.on('connection', (socket) => {
   console.log('🟢 Подключён:', socket.id);
 
+  // Когда клиент входит в чат после логина
+  socket.on('user_connected', (username) => {
+    onlineUsers[socket.id] = username;
+    console.log(`✅ ${username} вошёл в чат`);
+    io.emit('online_users', Object.values(onlineUsers));
+  });
+
+  // Получение и отправка сообщений
   socket.on('send_message', (data) => {
     io.emit('receive_message', data);
   });
 
+  // Отключение пользователя
   socket.on('disconnect', () => {
-    console.log('🔴 Отключён:', socket.id);
+    const username = onlineUsers[socket.id];
+    delete onlineUsers[socket.id];
+    console.log(`🔴 ${username || 'Пользователь'} отключён`);
+    io.emit('online_users', Object.values(onlineUsers));
   });
 });
+
 
 const PORT = 3001;
 server.listen(PORT, () => {
