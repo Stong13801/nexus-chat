@@ -30,7 +30,7 @@ try {
   users = [];
 }
 
-// 🔐 РЕГИСТРАЦИЯ с хешированием
+// 🔐 Регистрация
 app.post('/register', async (req, res) => {
   const { username, password } = req.body;
   const exists = users.find((u) => u.username === username);
@@ -39,9 +39,9 @@ app.post('/register', async (req, res) => {
   try {
     const hashed = await bcrypt.hash(password, 10);
     const newUser = {
-        username,
-        password: hashed,
-        avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${username}`
+      username,
+      password: hashed,
+      avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${username}`,
     };
     users.push(newUser);
     fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
@@ -52,7 +52,7 @@ app.post('/register', async (req, res) => {
   }
 });
 
-// 🔐 ВХОД с проверкой хеша
+// 🔐 Вход
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
   const user = users.find((u) => u.username === username);
@@ -61,16 +61,26 @@ app.post('/login', async (req, res) => {
   const valid = await bcrypt.compare(password, user.password);
   if (!valid) return res.status(401).json({ message: 'Неверный логин или пароль' });
 
-  console.log('🔓 Вход выполнен:', username);
   res.status(200).json({
     message: 'Вход успешен',
     username,
-    avatar: user.avatar || null
-    });
-
+    avatar: user.avatar || null,
+  });
 });
 
-// 📥 ЗАГРУЗКА СООБЩЕНИЙ
+// 🔄 Смена аватара
+app.patch('/update-avatar', (req, res) => {
+  const { username, avatar } = req.body;
+  const user = users.find((u) => u.username === username);
+  if (!user) return res.status(404).json({ message: 'Пользователь не найден' });
+
+  user.avatar = avatar;
+  fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
+  console.log(`🖼 Аватар обновлён: ${username}`);
+  res.status(200).json({ message: 'Аватар обновлён', avatar });
+});
+
+// 📥 Загрузка сообщений
 app.get('/messages/:channel', (req, res) => {
   const { channel } = req.params;
   try {
@@ -83,7 +93,7 @@ app.get('/messages/:channel', (req, res) => {
   }
 });
 
-// ➕ СОЗДАНИЕ КАНАЛА
+// ➕ Создание канала
 app.post('/create-channel', (req, res) => {
   const { channel } = req.body;
   const name = channel?.toLowerCase().trim();
@@ -100,7 +110,6 @@ app.post('/create-channel', (req, res) => {
     console.log(`📁 Создан новый канал: #${name}`);
     res.status(200).json({ message: 'Канал создан' });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ message: 'Ошибка при создании канала' });
   }
 });
@@ -128,7 +137,7 @@ io.on('connection', (socket) => {
     const username = onlineUsers[socket.id];
     if (!username) return;
 
-    // 🔐 Ограничение доступа к ЛС
+    // 🔐 Проверка доступа к ЛС
     if (channel.startsWith('dm-')) {
       const parts = channel.split('-');
       const allowed = [parts[1], parts[2]];
