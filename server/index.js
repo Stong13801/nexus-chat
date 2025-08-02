@@ -7,11 +7,12 @@ const app = express();
 const server = http.createServer(app);
 
 app.use(cors());
-app.use(express.json()); // для чтения JSON в запросах
+app.use(express.json());
 
-const users = []; // временное хранилище пользователей
+const users = []; // временное хранилище зарегистрированных пользователей
+const onlineUsers = {}; // socket.id => username
 
-// 🚪 РЕГИСТРАЦИЯ
+// РЕГИСТРАЦИЯ
 app.post('/register', (req, res) => {
   const { username, password } = req.body;
 
@@ -25,7 +26,7 @@ app.post('/register', (req, res) => {
   res.status(200).json({ message: 'Успешно зарегистрирован' });
 });
 
-// 🔐 ВХОД
+// ВХОД
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
 
@@ -38,7 +39,7 @@ app.post('/login', (req, res) => {
   res.status(200).json({ message: 'Вход успешен', username });
 });
 
-// 📡 WebSocket
+// WebSocket
 const io = new Server(server, {
   cors: {
     origin: 'http://localhost:3000',
@@ -46,24 +47,25 @@ const io = new Server(server, {
   },
 });
 
-const onlineUsers = {}; // socket.id => username
-
 io.on('connection', (socket) => {
   console.log('🟢 Подключён:', socket.id);
 
-  // Когда клиент входит в чат после логина
   socket.on('user_connected', (username) => {
     onlineUsers[socket.id] = username;
     console.log(`✅ ${username} вошёл в чат`);
     io.emit('online_users', Object.values(onlineUsers));
   });
 
-  // Получение и отправка сообщений
-  socket.on('send_message', (data) => {
-    io.emit('receive_message', data);
+  socket.on('join_channel', (channel) => {
+    socket.join(channel);
+    console.log(`📥 ${onlineUsers[socket.id] || 'Пользователь'} присоединился к каналу ${channel}`);
   });
 
-  // Отключение пользователя
+  socket.on('send_message', (data) => {
+    const { channel, ...rest } = data;
+    io.to(channel).emit('receive_message', data);
+  });
+
   socket.on('disconnect', () => {
     const username = onlineUsers[socket.id];
     delete onlineUsers[socket.id];
@@ -71,7 +73,6 @@ io.on('connection', (socket) => {
     io.emit('online_users', Object.values(onlineUsers));
   });
 });
-
 
 const PORT = 3001;
 server.listen(PORT, () => {
