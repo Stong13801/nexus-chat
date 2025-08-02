@@ -81,6 +81,13 @@ app.patch('/update-avatar', (req, res) => {
 
   user.avatar = avatar;
   fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
+
+  const updatedOnline = Object.entries(onlineUsers).map(([id, name]) => {
+    const user = users.find(u => u.username === name);
+    return { username: name, avatar: user?.avatar || "" };
+  });
+  io.emit('online_users', updatedOnline);
+
   res.status(200).json({ message: 'Аватар обновлён', avatar });
 });
 
@@ -139,7 +146,11 @@ io.on('connection', (socket) => {
 
   socket.on('user_connected', (username) => {
     onlineUsers[socket.id] = username;
-    io.emit('online_users', Object.values(onlineUsers));
+    const online = Object.entries(onlineUsers).map(([id, name]) => {
+      const user = users.find(u => u.username === name);
+      return { username: name, avatar: user?.avatar || "" };
+    });
+    io.emit('online_users', online);
   });
 
   socket.on('join_channel', (channel) => {
@@ -177,7 +188,11 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     const username = onlineUsers[socket.id];
     delete onlineUsers[socket.id];
-    io.emit('online_users', Object.values(onlineUsers));
+    const online = Object.entries(onlineUsers).map(([id, name]) => {
+      const user = users.find(u => u.username === name);
+      return { username: name, avatar: user?.avatar || "" };
+    });
+    io.emit('online_users', online);
   });
 });
 
