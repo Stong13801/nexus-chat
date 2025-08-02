@@ -3,6 +3,7 @@ const http = require('http');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const bcrypt = require('bcrypt');
 const { Server } = require('socket.io');
 
 const app = express();
@@ -29,30 +30,38 @@ try {
   users = [];
 }
 
-// РЕГИСТРАЦИЯ
-app.post('/register', (req, res) => {
+// 🔐 РЕГИСТРАЦИЯ с хешированием
+app.post('/register', async (req, res) => {
   const { username, password } = req.body;
   const exists = users.find((u) => u.username === username);
   if (exists) return res.status(400).json({ message: 'Пользователь уже существует' });
 
-  const newUser = { username, password };
-  users.push(newUser);
-  fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
-  console.log('✅ Зарегистрирован:', username);
-  res.status(200).json({ message: 'Успешно зарегистрирован' });
+  try {
+    const hashed = await bcrypt.hash(password, 10);
+    const newUser = { username, password: hashed };
+    users.push(newUser);
+    fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
+    console.log('✅ Зарегистрирован:', username);
+    res.status(200).json({ message: 'Успешно зарегистрирован' });
+  } catch (err) {
+    res.status(500).json({ message: 'Ошибка регистрации' });
+  }
 });
 
-// ВХОД
-app.post('/login', (req, res) => {
+// 🔐 ВХОД с проверкой хеша
+app.post('/login', async (req, res) => {
   const { username, password } = req.body;
-  const user = users.find((u) => u.username === username && u.password === password);
+  const user = users.find((u) => u.username === username);
   if (!user) return res.status(401).json({ message: 'Неверный логин или пароль' });
+
+  const valid = await bcrypt.compare(password, user.password);
+  if (!valid) return res.status(401).json({ message: 'Неверный логин или пароль' });
 
   console.log('🔓 Вход выполнен:', username);
   res.status(200).json({ message: 'Вход успешен', username });
 });
 
-// ЗАГРУЗКА СООБЩЕНИЙ
+// 📥 ЗАГРУЗКА СООБЩЕНИЙ
 app.get('/messages/:channel', (req, res) => {
   const { channel } = req.params;
   try {
@@ -65,7 +74,7 @@ app.get('/messages/:channel', (req, res) => {
   }
 });
 
-// СОЗДАНИЕ КАНАЛА
+// ➕ СОЗДАНИЕ КАНАЛА
 app.post('/create-channel', (req, res) => {
   const { channel } = req.body;
   const name = channel?.toLowerCase().trim();
@@ -87,7 +96,7 @@ app.post('/create-channel', (req, res) => {
   }
 });
 
-// WebSocket
+// 🌐 WebSocket
 const io = new Server(server, {
   cors: {
     origin: 'http://localhost:3000',
@@ -110,7 +119,7 @@ io.on('connection', (socket) => {
     const username = onlineUsers[socket.id];
     if (!username) return;
 
-    // 🔐 Если канал личный — проверяем участников
+    // 🔐 Ограничение доступа к ЛС
     if (channel.startsWith('dm-')) {
       const parts = channel.split('-');
       const allowed = [parts[1], parts[2]];
