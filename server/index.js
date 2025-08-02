@@ -13,16 +13,17 @@ app.use(express.json());
 
 const usersFile = path.join(__dirname, 'users.json');
 const messagesDir = path.join(__dirname, 'messages');
-const channels = ['general', 'random', 'support'];
+const defaultChannels = ['general', 'random', 'support'];
 
+// 📁 Создаём папку messages и базовые каналы при первом запуске
 if (!fs.existsSync(messagesDir)) {
   fs.mkdirSync(messagesDir);
-  for (const ch of channels) {
+  for (const ch of defaultChannels) {
     fs.writeFileSync(path.join(messagesDir, `${ch}.json`), '[]');
   }
 }
 
-// Загружаем пользователей
+// 🧠 Загружаем пользователей из файла
 let users = [];
 try {
   users = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
@@ -30,7 +31,7 @@ try {
   users = [];
 }
 
-// РЕГИСТРАЦИЯ
+// 🔐 РЕГИСТРАЦИЯ
 app.post('/register', (req, res) => {
   const { username, password } = req.body;
   const exists = users.find((u) => u.username === username);
@@ -45,7 +46,7 @@ app.post('/register', (req, res) => {
   res.status(200).json({ message: 'Успешно зарегистрирован' });
 });
 
-// ВХОД
+// 🔓 ВХОД
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
   const user = users.find((u) => u.username === username && u.password === password);
@@ -57,11 +58,14 @@ app.post('/login', (req, res) => {
   res.status(200).json({ message: 'Вход успешен', username });
 });
 
-// ВОССТАНОВЛЕНИЕ СООБЩЕНИЙ
+// 📥 ЗАГРУЗКА СООБЩЕНИЙ КАНАЛА
 app.get('/messages/:channel', (req, res) => {
   const { channel } = req.params;
   try {
     const filePath = path.join(messagesDir, `${channel}.json`);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ message: 'Канал не найден' });
+    }
     const messages = JSON.parse(fs.readFileSync(filePath, 'utf8'));
     res.json(messages);
   } catch {
@@ -69,7 +73,31 @@ app.get('/messages/:channel', (req, res) => {
   }
 });
 
-// WebSocket
+// ➕ СОЗДАНИЕ НОВОГО КАНАЛА
+app.post('/create-channel', (req, res) => {
+  const { channel } = req.body;
+  const name = channel?.toLowerCase().trim();
+
+  if (!name || name.includes(' ') || name.length > 32) {
+    return res.status(400).json({ message: 'Недопустимое имя канала' });
+  }
+
+  const filePath = path.join(messagesDir, `${name}.json`);
+  if (fs.existsSync(filePath)) {
+    return res.status(409).json({ message: 'Канал уже существует' });
+  }
+
+  try {
+    fs.writeFileSync(filePath, '[]');
+    console.log(`📁 Создан новый канал: #${name}`);
+    res.status(200).json({ message: 'Канал создан' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Ошибка при создании канала' });
+  }
+});
+
+// 🌐 WebSocket
 const io = new Server(server, {
   cors: {
     origin: 'http://localhost:3000',
@@ -102,9 +130,11 @@ io.on('connection', (socket) => {
       timestamp: Date.now(),
     };
 
-    // Сохраняем сообщение в файл
     const filePath = path.join(messagesDir, `${channel}.json`);
-    const current = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    const current = fs.existsSync(filePath)
+      ? JSON.parse(fs.readFileSync(filePath, 'utf8'))
+      : [];
+
     current.push(msg);
     fs.writeFileSync(filePath, JSON.stringify(current, null, 2));
 
