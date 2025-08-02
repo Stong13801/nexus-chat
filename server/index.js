@@ -15,7 +15,6 @@ const usersFile = path.join(__dirname, 'users.json');
 const messagesDir = path.join(__dirname, 'messages');
 const defaultChannels = ['general', 'random', 'support'];
 
-// 📁 Создаём папку messages и базовые каналы при первом запуске
 if (!fs.existsSync(messagesDir)) {
   fs.mkdirSync(messagesDir);
   for (const ch of defaultChannels) {
@@ -23,7 +22,6 @@ if (!fs.existsSync(messagesDir)) {
   }
 }
 
-// 🧠 Загружаем пользователей из файла
 let users = [];
 try {
   users = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
@@ -31,13 +29,11 @@ try {
   users = [];
 }
 
-// 🔐 РЕГИСТРАЦИЯ
+// РЕГИСТРАЦИЯ
 app.post('/register', (req, res) => {
   const { username, password } = req.body;
   const exists = users.find((u) => u.username === username);
-  if (exists) {
-    return res.status(400).json({ message: 'Пользователь уже существует' });
-  }
+  if (exists) return res.status(400).json({ message: 'Пользователь уже существует' });
 
   const newUser = { username, password };
   users.push(newUser);
@@ -46,26 +42,22 @@ app.post('/register', (req, res) => {
   res.status(200).json({ message: 'Успешно зарегистрирован' });
 });
 
-// 🔓 ВХОД
+// ВХОД
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
   const user = users.find((u) => u.username === username && u.password === password);
-  if (!user) {
-    return res.status(401).json({ message: 'Неверный логин или пароль' });
-  }
+  if (!user) return res.status(401).json({ message: 'Неверный логин или пароль' });
 
   console.log('🔓 Вход выполнен:', username);
   res.status(200).json({ message: 'Вход успешен', username });
 });
 
-// 📥 ЗАГРУЗКА СООБЩЕНИЙ КАНАЛА
+// ЗАГРУЗКА СООБЩЕНИЙ
 app.get('/messages/:channel', (req, res) => {
   const { channel } = req.params;
   try {
     const filePath = path.join(messagesDir, `${channel}.json`);
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ message: 'Канал не найден' });
-    }
+    if (!fs.existsSync(filePath)) return res.status(404).json({ message: 'Канал не найден' });
     const messages = JSON.parse(fs.readFileSync(filePath, 'utf8'));
     res.json(messages);
   } catch {
@@ -73,7 +65,7 @@ app.get('/messages/:channel', (req, res) => {
   }
 });
 
-// ➕ СОЗДАНИЕ НОВОГО КАНАЛА
+// СОЗДАНИЕ КАНАЛА
 app.post('/create-channel', (req, res) => {
   const { channel } = req.body;
   const name = channel?.toLowerCase().trim();
@@ -83,9 +75,7 @@ app.post('/create-channel', (req, res) => {
   }
 
   const filePath = path.join(messagesDir, `${name}.json`);
-  if (fs.existsSync(filePath)) {
-    return res.status(409).json({ message: 'Канал уже существует' });
-  }
+  if (fs.existsSync(filePath)) return res.status(409).json({ message: 'Канал уже существует' });
 
   try {
     fs.writeFileSync(filePath, '[]');
@@ -97,7 +87,7 @@ app.post('/create-channel', (req, res) => {
   }
 });
 
-// 🌐 WebSocket
+// WebSocket
 const io = new Server(server, {
   cors: {
     origin: 'http://localhost:3000',
@@ -117,8 +107,21 @@ io.on('connection', (socket) => {
   });
 
   socket.on('join_channel', (channel) => {
+    const username = onlineUsers[socket.id];
+    if (!username) return;
+
+    // 🔐 Если канал личный — проверяем участников
+    if (channel.startsWith('dm-')) {
+      const parts = channel.split('-');
+      const allowed = [parts[1], parts[2]];
+      if (!allowed.includes(username)) {
+        console.log(`⛔ ${username} попытался подключиться к чужому ЛС: ${channel}`);
+        return;
+      }
+    }
+
     socket.join(channel);
-    console.log(`📥 ${onlineUsers[socket.id]} → #${channel}`);
+    console.log(`📥 ${username} → #${channel}`);
   });
 
   socket.on('send_message', (data) => {
